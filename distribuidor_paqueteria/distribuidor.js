@@ -1,7 +1,4 @@
 const {zonas} = require('./zonas_ciudad');
-const request = require('request');
-const constants = require("./../common/constants");
-
 const gradosARadianes = (grados) => {
     return grados * Math.PI / 180;
 };

@@ -16,7 +16,6 @@
     "express-validator": "^6.14.2",
     "geolib": "^3.3.3",
     "mysql": "^2.18.1",
-    "request": "^2.88.2",
     "swagger-ui-express": "^4.6.0"
   }
 }
