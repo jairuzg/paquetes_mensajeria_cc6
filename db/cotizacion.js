@@ -38,7 +38,7 @@ function agregarCotizacion(cotizacion, callback) {
         ' values (?, point(?, ?), point(?, ?), now(), ?, ?, ?, ?, ?, ?, ?, ?, ?);';
     return conn.query(sql, [cotizacion.orderID, recogidaLongitud, recogidaLatitud, destinoLongitud,
         destinoLatitud, costo, tiempoEstimadoLlegada, 1, cotizacion.nombreRecibe, "Nuevo", cotizacion.cantidadArticulos,
-        cotizacion.precioTotal, (costo + cotizacion.precioTotal), cotizacion.pesoTotal], function (err, results, fields) {
+        cotizacion.precioTotal, (cotizacion.precioTotal + (cotizacion.precioTotal * constants.PERCENT_TAX)), cotizacion.pesoTotal], function (err, results, fields) {
         if (err) {
             console.log(err)
             callback(err);
@@ -50,9 +50,9 @@ function agregarCotizacion(cotizacion, callback) {
             "cantidadArticulos": cotizacion.cantidadArticulos,
             "fechaEntrega": null,
             "ETA": tiempoEstimadoLlegada,
-            "costoEnvio": costo,
+            "costoEnvio": cotizacion.precioTotal * constants.PERCENT_TAX,
             "costoPiezas": cotizacion.precioTotal,
-            "costoTotal": (costo + cotizacion.precioTotal)
+            "costoTotal": (cotizacion.precioTotal + (cotizacion.precioTotal * constants.PERCENT_TAX))
         }
         callback(null, coti);
     });
