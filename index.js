@@ -330,7 +330,7 @@ app.post('/delivery',
         let servidor = obtenerServidorCorrespondiente(cotizacion.recogidaLatitud, cotizacion.recogidaLongitud);
         console.log(servidor, constants.SERVIDOR_ACTUAL);
         if (servidor != constants.SERVIDOR_ACTUAL) {
-            console.log("haciendo un redirect?")
+            console.log("se necesita distribuir la creacion de la orden")
             return res.redirect(307, constants.SERVIDORES_DIST[servidor].HOST + "/delivery");
         }
 
@@ -389,6 +389,8 @@ app.post('/pago',
         obtenerCotizacionPorOdenEnFirestore(req.body.ordenID).then(cotiFirestore => {
             const servidor = cotiFirestore.servidor;
             if (servidor != constants.SERVIDOR_ACTUAL) {
+                console.log("Servidor actual", constants.SERVIDOR_ACTUAL, "servidor de la orden ", servidor);
+                console.log("se necesita distribuir la creacion del pago")
                 return res.redirect(307, constants.SERVIDORES_DIST[servidor].HOST + "/pago");
             } else {
                 transicionarCotiAPagado(req.body, function (err, isOk) {
