@@ -382,6 +382,20 @@ app.get('/orden/:ordenID', function (req, res) {
     });
 });
 
+app.post('/orden',
+    body("ordenID").isString().notEmpty(),
+    function (req, res) {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            console.log(errors);
+            return res.status(400).json({errors: errors.array()});
+        }
+        obtenerCotizacionPorOdenEnFirestore(req.body.ordenID).then(cotiFirestore => {
+            delete cotiFirestore.firestoreId;
+            return res.status(200).send(cotiFirestore);
+        });
+    });
+
 app.post('/pago',
     body("ordenID").notEmpty().isString(),
     body("numeroCC").isString().notEmpty(),
