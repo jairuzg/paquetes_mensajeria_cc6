@@ -12,7 +12,6 @@ app.use(cors(
 ));
 const {body, validationResult, oneOf} = require('express-validator');
 
-const crudo = require('./db/query_crudo');
 const {insertarGrua} = require('./db/gruas');
 const {
     insertarBus,
@@ -21,25 +20,21 @@ const {
     actualizarBusPorId,
     obtenerBusPorId
 } = require('./db/bus_mensajeria');
-const {relacionarBusZona, encontrarBusPorZona, eliminarVinculoBusZona} = require('./db/bus_zona');
 const {
     insertarZonaCobertura,
-    encontrarZonaCercaDeCoordenada,
     listarTodasLasZonasCobertura, obtenerZonaPorId, eliminarZonaPorId, modificarZonaPorId
 } = require('./db/zona_cobertura');
 const {
-    agregarCotizacion,
     transicionarCotiAPagado,
-    obtenerCotizacionPorOdenID,
-    mandarCotizacionAFirebase, actualizarEstadoOrdenFirestore, obtenerCotizacionPorOdenEnFirestore
+    actualizarEstadoOrdenFirestore, obtenerCotizacionPorOdenEnFirestore
 } = require('./db/cotizacion');
 const {heartBeat} = require('./db/heartbeat');
 const {insertarPago, mandarPagoAFirestore} = require("./db/pago");
 const {
-    encontrarZonaCercanaAPuntoRecogida,
-    obtenerServidorCorrespondiente
+    encontrarZonaCercanaAPuntoRecogida
 } = require("./distribuidor_paqueteria/distribuidor");
 const constants = require("./common/constants");
+const {enviarOrdenAFirebase, guardarOrdenEnDBLocal} = require("./servicios/servicio_ordenes");
 
 app.get('/', (req, res) => {
     res.status(200).send({
@@ -266,43 +261,6 @@ app.patch('/zona/:zonaCobertura',
         });
     });
 
-app.post('/vincularBusZona',
-    body('busMensajeria').isNumeric().notEmpty(),
-    body('zonaCobertura').isNumeric().notEmpty(),
-    (req, res) => {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({errors: errors.array()});
-        }
-        let busZona = req.body;
-        relacionarBusZona(busZona, function (err, resultId) {
-            if (resultId) {
-                return res.status(200).send({
-                    success: "true",
-                    message: "Zona de cobertura vinculada al bus con exito, ID: " + resultId,
-                });
-            } else {
-                return res.status(400).send({errors: err});
-            }
-        });
-    });
-
-app.delete('/desvincularBusZona/:busZona', (req, res) => {
-    eliminarVinculoBusZona(req.params.busZona, (err, isOk) => {
-        if (isOk) {
-            return res.status(200).send({
-                succuess: true,
-                message: "Se devincularon el bus con la zona"
-            });
-        } else {
-            return res.status(400).send({
-                succuess: false,
-                message: "Hubo un problema al intentar desvincular la zona y el bus"
-            });
-        }
-    });
-});
-
 app.post('/delivery',
     body("orderId").isString().notEmpty(),
     body("quantityArticles").isNumeric(),
@@ -312,6 +270,8 @@ app.post('/delivery',
     body("pickupLongitud").isDecimal(),
     body("deliveryLatitud").isDecimal(),
     body("deliveryLongitud").isDecimal(),
+    body("clientName").isString().optional(),
+    body("firebaseId").isString().optional(),
     (req, res) => {
         console.log("Requesting a new ORDER ", req.body);
         const errors = validationResult(req);
@@ -321,57 +281,31 @@ app.post('/delivery',
         }
 
         let cotizacion = {
-            orderID: req.body.orderId,
+            ordenID: req.body.orderId,
             cantidadArticulos: req.body.quantityArticles,
             pesoTotal: req.body.totalWeight,
             precioTotal: req.body.totalPrice,
             recogidaLatitud: req.body.pickupLatitud,
             recogidaLongitud: req.body.pickupLongitud,
             destinoLatitud: req.body.deliveryLatitud,
-            destinoLongitud: req.body.deliveryLongitud
+            destinoLongitud: req.body.deliveryLongitud,
+            nombreRecibe: req.body.clientName,
+            firebaseId: req.body.firebaseId ? req.body.firebaseId : ""
         }
 
-        // Distribucion
-        let servidor = obtenerServidorCorrespondiente(cotizacion.recogidaLatitud, cotizacion.recogidaLongitud);
-        console.log(servidor, constants.SERVIDOR_ACTUAL);
-        if (servidor != constants.SERVIDOR_ACTUAL) {
-            console.log("se necesita distribuir la creacion de la orden")
-            return res.redirect(307, constants.SERVIDORES_DIST[servidor].HOST + "/delivery");
-        }
-
-        encontrarZonaCercaDeCoordenada(req.body.recogidaLatitud, req.body.recogidaLongitud, function (err, zonaCobertura) {
-            if (zonaCobertura) {
-                encontrarBusPorZona(zonaCobertura['zona_cobertura'], function (err2, busMensajeria) {
-                    if (!err2) {
-                        cotizacion.busMensajeria = busMensajeria['bus_mensajeria'];
-                        agregarCotizacion(cotizacion, function (err3, cotiRes) {
-                            if (err) {
-                                return res.status(400).json({
-                                    success: false,
-                                    message: "No se pudo realizar la cotizacion ",
-                                    errors: err3
-                                });
-                            } else {
-                                mandarCotizacionAFirebase(cotiRes);
-                                return res.status(200).send(
-                                    cotiRes);
-                            }
-                        })
-                    } else {
-                        return res.status(404).json({
-                            success: false,
-                            message: "No se pudo encontrar algun bus que pueda cubrir la region ingresada",
-                            errors: err2
-                        });
-                    }
-                });
-            } else {
-                if (err) return res.status(404).json({
-                    success: false,
-                    message: "No se pudo encontrar alguna zona de cobertura cerca de las coordenadas ingresadas"
-                });
+        enviarOrdenAFirebase(cotizacion).then((data) => {
+            console.log("la coti luego de enviar a firebase", data.cotizacion)
+            req.body.firebaseId = data.cotizacion.firebaseId;
+            if (data.cotizacion.servidor != constants.SERVIDOR_ACTUAL) {
+                console.log("Distribucion: Comparando servidores, actual: " + servidor + " y se necesita enviar a " + constants.SERVIDOR_ACTUAL);
+                return res.redirect(307, constants.SERVIDORES_DIST[servidor].HOST + "/delivery");
             }
+            guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
+                console.log('que traer orderResp ', orderResp);
+                return res.status(orderResp.code).send(orderResp.data);
+            });
         });
+
     });
 
 app.get('/orden/:ordenID', function (req, res) {

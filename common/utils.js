@@ -3,6 +3,11 @@ function getRandomInRange(from, to, fixed) {
     // .toFixed() returns string, so ' * 1' is a trick to convert to number
 }
 
+function cloneObject(object) {
+    return JSON.parse(JSON.stringify(object));
+};
+
 module.exports = {
-    getRandomInRange: getRandomInRange
+    getRandomInRange: getRandomInRange,
+    cloneObject: cloneObject
 }
