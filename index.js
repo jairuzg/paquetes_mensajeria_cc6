@@ -2,9 +2,14 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 app.use(express.json());
-app.use(cors({
-    origin: "*"
-}));
+app.use(cors(
+    {
+        "origin": "*",
+        "methods": "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+        "preflightContinue": false,
+        "optionsSuccessStatus": 204
+    }
+));
 const {body, validationResult, oneOf} = require('express-validator');
 
 const crudo = require('./db/query_crudo');
@@ -370,7 +375,8 @@ app.post('/delivery',
     });
 
 app.get('/orden/:ordenID', function (req, res) {
-    obtenerCotizacionPorOdenEnFirestore(req.params.ordenID).then(cotiFirestore => {
+    let ordenID = req.body.ordenID ? req.body.ordenID : req.params.ordenID;
+    obtenerCotizacionPorOdenEnFirestore(ordenID).then(cotiFirestore => {
         delete cotiFirestore.firestoreId;
         return res.status(200).send(cotiFirestore);
     });
