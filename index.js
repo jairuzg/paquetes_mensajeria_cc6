@@ -301,8 +301,8 @@ app.post('/delivery',
             console.log("la coti luego de enviar a firebase", data.cotizacion)
             req.body.firebaseId = data.cotizacion.firebaseId;
             if (data.cotizacion.servidor != constants.SERVIDOR_ACTUAL) {
-                console.log("Distribucion: Comparando servidores, actual: " + servidor + " y se necesita enviar a " + constants.SERVIDOR_ACTUAL);
-                return res.redirect(307, constants.SERVIDORES_DIST[servidor].HOST + "/delivery");
+                console.log("Distribucion: Comparando servidores, destino " + data.cotizacion.servidor + " servidor actual " + constants.SERVIDOR_ACTUAL);
+                return res.redirect(307, constants.SERVIDORES_DIST[data.cotizacion.servidor].HOST + "/delivery");
             }
             guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
                 console.log('que trae orderResp ', orderResp);
