@@ -14,12 +14,12 @@ console.log(distance / 1000) //value in km
 function agregarCotizacion(cotizacion, callback) {
     console.log('entrando a agregar cotizacion');
     let sql = 'insert into cotizacion_msj (cotizacion_msj, recogida, destino, fecha_servicio, precio_envio, tiempo_estimado_llegada, ' +
-        ' bus_mensajeria, nombre_recibe, estado, cantidad_articulos, precio_articulos, precio_total, peso_total, servidor) ' +
-        ' values (?, point(?, ?), point(?, ?), now(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);';
+        ' bus_mensajeria, nombre_recibe, estado, cantidad_articulos, precio_articulos, precio_total, peso_total, servidor, externalDBId) ' +
+        ' values (?, point(?, ?), point(?, ?), now(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?);';
     return conn.query(sql, [cotizacion.ordenID, cotizacion.recogidaLongitud, cotizacion.recogidaLatitud, cotizacion.destinoLongitud,
         cotizacion.destinoLatitud, cotizacion.costoEnvio, cotizacion.tiempoEstimadoLlegada, cotizacion.busMensajeria, cotizacion.nombreRecibe, cotizacion.estado,
         cotizacion.cantidadArticulos, cotizacion.precioTotal, (cotizacion.precioTotal + (cotizacion.precioTotal * constants.PERCENT_TAX)),
-        cotizacion.pesoTotal, cotizacion.servidor], function (err, results, fields) {
+        cotizacion.pesoTotal, cotizacion.servidor, cotizacion.firebaseId], function (err, results, fields) {
         console.log('ya dentro del query?')
         if (err) {
             console.log(err)
@@ -86,16 +86,23 @@ async function obtenerCotizacionPorOdenEnFirestore(ordenId, callback) {
     snapshot.forEach(doc => {
         console.log(doc.id, '=>', doc.data());
         coti = doc.data();
-        coti.firestoreId = doc.id;
+        coti.firebaseId = doc.id;
     });
+    console.log("Se encontro la cotizacion en firebase ", coti.firebaseId);
     return coti;
 }
 
 async function actualizarEstadoOrdenFirestore(docId) {
-    const ordersRef = await dbfirestore.collection('orders').doc(docId);
-    ordersRef.update({
-        estado: constants.ORDEN_PAGADA
-    })
+    try {
+        const ordersRef = await dbfirestore.collection('orders').doc(docId);
+        await ordersRef.update({
+            estado: constants.ORDEN_PAGADA
+        })
+        return true;
+    } catch (ex) {
+        console.log("no se pudo actualizar la orden ", ex);
+        return false;
+    }
 }
 
 async function actualizarOrdenEnFirestore(cotizacion, firebaseId) {
@@ -105,6 +112,18 @@ async function actualizarOrdenEnFirestore(cotizacion, firebaseId) {
     ordersRef.update(cotizacion)
 }
 
+function ordenExiste(ordenID, callback) {
+    let sql = "select count(1) from cotizacion_msj where cotizacion_msj = ?";
+    conn.query(sql, ordenID, (errors, rows, fields) => {
+        if (!errors) {
+            let count = (JSON.parse(JSON.stringify(rows)))[0];
+            callback(null, (count > 0));
+        } else {
+            callback(errors);
+        }
+    });
+}
+
 module.exports = {
     agregarCotizacion: agregarCotizacion,
     transicionarCotiAPagado: transicionarCotiAPagado,
@@ -112,5 +131,6 @@ module.exports = {
     guardarCotizacionEnFirebase: guardarCotizacionEnFirebase,
     actualizarEstadoOrdenFirestore: actualizarEstadoOrdenFirestore,
     obtenerCotizacionPorOdenEnFirestore: obtenerCotizacionPorOdenEnFirestore,
-    actualizarOrdenEnFirestore: actualizarOrdenEnFirestore
+    actualizarOrdenEnFirestore: actualizarOrdenEnFirestore,
+    ordenExiste: ordenExiste
 }
