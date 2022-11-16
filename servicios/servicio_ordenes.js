@@ -68,7 +68,7 @@ async function guardarOrdenEnDBLocal(cotizacion, callback) {
                             if (cotizacion.firebaseId === "") {
                                 guardarCotizacionEnFirebase(transformarCotizacionAOrden(cotiRes));
                             } else {
-                                actualizarOrdenEnFirestore(transformarCotizacionAOrden(cotizacion));
+                                actualizarOrdenEnFirestore(transformarCotizacionAOrden(cotiRes), cotizacion.firebaseId);
                             }
                             callback({
                                 code: 200,
@@ -108,11 +108,13 @@ function transformarCotizacionAOrden(orden) {
         "ETA": orden.tiempoEstimadoLlegada,
         "costoEnvio": orden.precioTotal * constants.PERCENT_TAX,
         "costoPiezas": orden.precioTotal,
-        "costoTotal": (orden.precioTotal + (orden.precioTotal * constants.PERCENT_TAX))
+        "costoTotal": (orden.precioTotal + (orden.precioTotal * constants.PERCENT_TAX)),
+        "servidor": orden.servidor
     }
 }
 
 module.exports = {
     enviarOrdenAFirebase: enviarOrdenAFirebase,
-    guardarOrdenEnDBLocal: guardarOrdenEnDBLocal
+    guardarOrdenEnDBLocal: guardarOrdenEnDBLocal,
+    transformarCotizacionAOrden: transformarCotizacionAOrden
 }

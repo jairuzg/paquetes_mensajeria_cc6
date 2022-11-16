@@ -26,15 +26,19 @@ const {
 } = require('./db/zona_cobertura');
 const {
     transicionarCotiAPagado,
-    actualizarEstadoOrdenFirestore, obtenerCotizacionPorOdenEnFirestore
+    actualizarEstadoOrdenFirestore, obtenerCotizacionPorOdenEnFirestore, obtenerCotizacionPorOdenID
 } = require('./db/cotizacion');
 const {heartBeat} = require('./db/heartbeat');
-const {insertarPago, mandarPagoAFirestore} = require("./db/pago");
+const {insertarPago, mandarPagoAFirestore, obtenerPagoDeLaDBLocalPorOrdenID} = require("./db/pago");
 const {
     encontrarZonaCercanaAPuntoRecogida
 } = require("./distribuidor_paqueteria/distribuidor");
 const constants = require("./common/constants");
-const {enviarOrdenAFirebase, guardarOrdenEnDBLocal} = require("./servicios/servicio_ordenes");
+const {
+    enviarOrdenAFirebase,
+    guardarOrdenEnDBLocal,
+    transformarCotizacionAOrden
+} = require("./servicios/servicio_ordenes");
 
 app.get('/', (req, res) => {
     res.status(200).send({
@@ -301,7 +305,7 @@ app.post('/delivery',
                 return res.redirect(307, constants.SERVIDORES_DIST[servidor].HOST + "/delivery");
             }
             guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
-                console.log('que traer orderResp ', orderResp);
+                console.log('que trae orderResp ', orderResp);
                 return res.status(orderResp.code).send(orderResp.data);
             });
         });
@@ -313,6 +317,15 @@ app.get('/orden/:ordenID', function (req, res) {
     obtenerCotizacionPorOdenEnFirestore(ordenID).then(cotiFirestore => {
         delete cotiFirestore.firestoreId;
         return res.status(200).send(cotiFirestore);
+    });
+});
+
+app.get('/ordenLocal/:ordenID', function (req, res) {
+    let ordenID = req.body.ordenID ? req.body.ordenID : req.params.ordenID;
+    obtenerCotizacionPorOdenID(ordenID, (error, orden) => {
+        if (orden) {
+            return res.status(200).send(transformarCotizacionAOrden(orden));
+        }
     });
 });
 
@@ -329,6 +342,20 @@ app.post('/orden',
             return res.status(200).send(cotiFirestore);
         });
     });
+
+app.get('/pagoLocal/:ordenID', (req, res) => {
+    obtenerPagoDeLaDBLocalPorOrdenID(req.params.ordenID, (errors, pago) => {
+        if (pago) {
+            return res.status(200).send(pago);
+        } else {
+            return res.status(400).send({
+                success: false,
+                message: "Ocurrio un error al tratar de encontrar el pago con ordenID " + req.params.ordenID,
+                errors: errors
+            })
+        }
+    });
+});
 
 app.post('/pago',
     body("ordenID").notEmpty().isString(),

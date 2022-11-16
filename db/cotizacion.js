@@ -12,17 +12,20 @@ const distance = getDistance(
 console.log(distance / 1000) //value in km
 
 function agregarCotizacion(cotizacion, callback) {
+    console.log('entrando a agregar cotizacion');
     let sql = 'insert into cotizacion_msj (cotizacion_msj, recogida, destino, fecha_servicio, precio_envio, tiempo_estimado_llegada, ' +
-        ' bus_mensajeria, nombre_recibe, estado, cantidad_articulos, precio_articulos, precio_total, peso_total) ' +
-        ' values (?, point(?, ?), point(?, ?), now(), ?, ?, ?, ?, ?, ?, ?, ?, ?);';
+        ' bus_mensajeria, nombre_recibe, estado, cantidad_articulos, precio_articulos, precio_total, peso_total, servidor) ' +
+        ' values (?, point(?, ?), point(?, ?), now(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);';
     return conn.query(sql, [cotizacion.ordenID, cotizacion.recogidaLongitud, cotizacion.recogidaLatitud, cotizacion.destinoLongitud,
         cotizacion.destinoLatitud, cotizacion.costoEnvio, cotizacion.tiempoEstimadoLlegada, cotizacion.busMensajeria, cotizacion.nombreRecibe, cotizacion.estado,
         cotizacion.cantidadArticulos, cotizacion.precioTotal, (cotizacion.precioTotal + (cotizacion.precioTotal * constants.PERCENT_TAX)),
-        cotizacion.pesoTotal], function (err, results, fields) {
+        cotizacion.pesoTotal, cotizacion.servidor], function (err, results, fields) {
+        console.log('ya dentro del query?')
         if (err) {
             console.log(err)
             callback(err);
         } else {
+            console.log("que pasa dentro del success de agregar cotizacion", cotizacion)
             callback(null, cotizacion);
         }
     });
@@ -54,15 +57,19 @@ function transicionarCotiAPagado(pago, callback) {
 
 function obtenerCotizacionPorOdenID(ordenID, callback) {
     let sql = "select cotizacion_msj ordenID, estado, cantidad_articulos cantidadArticulos, fecha_llegada fechaEntrega, " +
-        "tiempo_estimado_llegada ETA, precio_envio costoEnvio, precio_articulos costoPiezas, precio_total costoTotal from cotizacion_msj " +
+        "tiempo_estimado_llegada tiempoEstimadoLlegada, precio_envio costoEnvio, precio_articulos precioTotal, servidor from cotizacion_msj " +
         "where cotizacion_msj = ?";
     conn.query(sql, ordenID, function (err, rows, fields) {
         if (err) {
             callback(err)
         } else {
-            console.log('the rows', rows)
-            let coti = JSON.parse(JSON.stringify(rows));
-            callback(null, coti[0])
+            if (rows.length) {
+                let coti = JSON.parse(JSON.stringify(rows));
+                callback(null, coti[0])
+            } else {
+                callback({error: "No se encontro la orden " + ordenID})
+            }
+
         }
     });
 }
@@ -91,8 +98,9 @@ async function actualizarEstadoOrdenFirestore(docId) {
     })
 }
 
-async function actualizarOrdenEnFirestore(cotizacion) {
-    const ordersRef = await dbfirestore.collection('orders').doc(cotizacion.firebaseId);
+async function actualizarOrdenEnFirestore(cotizacion, firebaseId) {
+    console.log("dentro de actualizar orden para firebase ", cotizacion)
+    const ordersRef = await dbfirestore.collection('orders').doc(firebaseId);
     delete cotizacion.firebaseId;
     ordersRef.update(cotizacion)
 }

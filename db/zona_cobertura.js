@@ -31,8 +31,12 @@ function encontrarZonaCercaDeCoordenada(latitud, longitud, callback) {
             console.log('que pedo', err)
             callback(err);
         } else {
-            let zonaCobertura = JSON.parse(JSON.stringify(rows));
-            callback(null, zonaCobertura[0]);
+            if (rows.length) {
+                let zonaCobertura = JSON.parse(JSON.stringify(rows));
+                callback(null, zonaCobertura[0]);
+            } else {
+                callback({error: "No se encontro ninguna zona de cobertura para esa entrega"});
+            }
         }
     });
 }

@@ -30,7 +30,21 @@ function mandarPagoAFirestore(pago) {
     });
 }
 
+function obtenerPagoDeLaDBLocalPorOrdenID(ordenID, callback) {
+    let sql = "select pago, ordenID, fecha_transaccion fechaTransaccion from pago where ordenID = ? ";
+    conn.query(sql, ordenID, (errors, rows, fields) => {
+        if (!errors && rows.length) {
+            let pago = JSON.parse(JSON.stringify(rows));
+            callback(null, pago[0]);
+        } else {
+            if (errors) callback(errors);
+            else callback({error: "No se encontro ningun pago con ese identificador de orden"});
+        }
+    });
+}
+
 module.exports = {
     insertarPago: insertarPago,
-    mandarPagoAFirestore: mandarPagoAFirestore
+    mandarPagoAFirestore: mandarPagoAFirestore,
+    obtenerPagoDeLaDBLocalPorOrdenID: obtenerPagoDeLaDBLocalPorOrdenID
 }
