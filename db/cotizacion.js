@@ -113,12 +113,14 @@ async function actualizarOrdenEnFirestore(cotizacion, firebaseId) {
 }
 
 function ordenExiste(ordenID, callback) {
-    let sql = "select count(1) from cotizacion_msj where cotizacion_msj = ?";
+    let sql = "select count(1) conteo from cotizacion_msj where cotizacion_msj = ?";
     conn.query(sql, ordenID, (errors, rows, fields) => {
         if (!errors) {
-            let count = (JSON.parse(JSON.stringify(rows)))[0];
+            let count = (JSON.parse(JSON.stringify(rows)))[0].conteo;
+            console.log("se pudo encontrar la orden en esta base de datos ", count);
             callback(null, (count > 0));
         } else {
+            console.log("Hubo un inconveniente al tratar de encontrar la orden en esta base de datos ", ordenID);
             callback(errors);
         }
     });

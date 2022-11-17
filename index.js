@@ -393,48 +393,55 @@ app.post('/pago',
                     console.log("ALERTA: El servidor destino no pudo atender la llamada ", error.message);
                 });
             }
-            actualizarEstadoOrdenFirestore(cotizacion).then(isOk => {
+            actualizarEstadoOrdenFirestore(cotizacion.firebaseId).then(isOk => {
                 console.log("Se actualizo la orden en firestore exitosamente");
             }).catch(error => {
                 console.log("No se pudo actualizar el estado de la orden en Firestore ", error.message);
             });
-            return pagoParcial(req, res);
+            pagoParcial(req.body, (error, resp) => {
+                if (!error) {
+                    return res.status(resp.code).send(resp.data);
+                } else {
+                    return res.status(400).send(resp.data);
+                }
+            });
         }).catch(error => {
             console.log("Ocurrio un error al tratar de obtener la orden desde Firestore ", req.body.ordenID, error.message);
-            return pagoParcial(req, res);
+            return res.status(pagoLocal.code).send(pagoLocal.data);
         });
     });
 
-function pagoParcial(req, res) {
-    ordenExiste(req.body.ordenID, (errors, siExiste) => {
+function pagoParcial(reqBody, callback) {
+    ordenExiste(reqBody.ordenID, (errors, siExiste) => {
         if (siExiste) {
-            transicionarCotiAPagado(req.body, function (err, isOk) {
+            transicionarCotiAPagado(reqBody, function (err, isOk) {
                 if (isOk) {
-                    insertarPago(req.body, function (err2, pago) {
+                    insertarPago(reqBody, function (err2, pago) {
                         if (pago) {
                             mandarPagoAFirestore(pago);
-                            return res.status(200).send({
-                                success: true,
-                                message: "Pago realizado con exito para la orden " + req.body.ordenID
+                            callback(null, {
+                                code: 200,
+                                data: {
+                                    success: true,
+                                    message: "Pago realizado con exito para la orden " + reqBody.ordenID
+                                }
                             });
                         } else {
-                            return res.status(200).send({
+                            callback(null, {
                                 success: true,
-                                message: "Pago realizado con exito para la orden " + req.body.ordenID + " pero no se pudo guardar la informacion para historial ",
-                                errors: err2
+                                data: {
+                                    message: "Pago realizado con exito para la orden " + reqBody.ordenID + " pero no se pudo guardar la informacion para historial ",
+                                    errors: err2
+                                }
                             });
                         }
                     });
                 } else {
-                    return res.status(400).send({
-                        success: false,
-                        message: "Hubo un inconveniente al realizar su pago",
-                        error: err
-                    });
+                    callback(err);
                 }
             });
         } else {
-            console.log(`La orden ${req.body.ordenID} no existe en este servidor `, constants.SERVIDOR_ACTUAL);
+            console.log(`La orden ${reqBody.ordenID} no existe en este servidor `, constants.SERVIDOR_ACTUAL);
         }
     });
 }
