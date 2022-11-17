@@ -300,27 +300,29 @@ app.post('/delivery',
         }
 
         enviarOrdenAFirebase(cotizacion).then((data) => {
-            console.log("la coti luego de enviar a firebase", data.cotizacion)
-            req.body.firebaseId = data.cotizacion.firebaseId;
-            if (data.cotizacion.servidor != constants.SERVIDOR_ACTUAL) {
-                console.log("Distribucion: Comparando servidores, destino " + data.cotizacion.servidor + " servidor actual " + constants.SERVIDOR_ACTUAL);
+            if (!data.error) {
+                console.log("la coti luego de enviar a firebase", data.cotizacion)
+                req.body.firebaseId = data.cotizacion.firebaseId;
+                if (data.cotizacion.servidor != constants.SERVIDOR_ACTUAL) {
+                    console.log("Distribucion: Comparando servidores, destino " + data.cotizacion.servidor + " servidor actual " + constants.SERVIDOR_ACTUAL);
 
-                axios.get(constants.SERVIDORES_DIST[data.cotizacion.servidor].HEARTBEAT_URL).then((data) => {
-                    if (data.status === constants.HTTP_OK) {
-                        console.log("Redirigiendo request a servidor correspondiente ");
-                        return res.redirect(307, constants.SERVIDORES_DIST[data.cotizacion.servidor].HOST + "/delivery");
-                    } else {
-                        console.log("ALERTA: El servidor destino no pudo atender la llamada");
-                    }
-                }).catch(error => {
-                    console.log("ALERTA: El servidor destino no pudo atender la llamada ", error.message);
+                    axios.get(constants.SERVIDORES_DIST[data.cotizacion.servidor].HEARTBEAT_URL).then((data) => {
+                        if (data.status === constants.HTTP_OK) {
+                            console.log("Redirigiendo request a servidor correspondiente ");
+                            return res.redirect(307, constants.SERVIDORES_DIST[data.cotizacion.servidor].HOST + "/delivery");
+                        } else {
+                            console.log("ALERTA: El servidor destino no pudo atender la llamada");
+                        }
+                    }).catch(error => {
+                        console.log("ALERTA: El servidor destino no pudo atender la llamada ", error.message);
+                    });
+                }
+                guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
+                    return res.status(orderResp.code).send(orderResp.data);
                 });
-
             }
-            guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
-                console.log('que trae orderResp ', orderResp);
-                return res.status(orderResp.code).send(orderResp.data);
-            });
+        }).catch((ex) => {
+            console.log(ex);
         });
 
     });
@@ -380,34 +382,50 @@ app.post('/pago',
         if (!errors.isEmpty()) return res.status(400).json({errors: errors.array()});
         let cotizacion;
         obtenerCotizacionPorOdenEnFirestore(req.body.ordenID).then(cotiFirestore => {
-            cotizacion = cotiFirestore;
-            const servidor = cotiFirestore.servidor;
-            if (servidor != constants.SERVIDOR_ACTUAL) {
-                console.log("Servidor actual", constants.SERVIDOR_ACTUAL, "servidor de la orden ", servidor);
-                console.log("se necesita distribuir la creacion del pago")
-                axios.get(constants.SERVIDORES_DIST[data.cotizacion.servidor].HEARTBEAT_URL).then((data) => {
-                    if (data.status === constants.HTTP_OK) {
-                        return res.redirect(307, constants.SERVIDORES_DIST[servidor].HOST + "/pago");
-                    }
+            if (cotiFirestore) {
+                cotizacion = cotiFirestore;
+                const servidor = cotiFirestore.servidor;
+                if (servidor != constants.SERVIDOR_ACTUAL) {
+                    console.log("Servidor actual", constants.SERVIDOR_ACTUAL, "servidor de la orden ", servidor);
+                    console.log("se necesita distribuir la creacion del pago")
+                    axios.get(constants.SERVIDORES_DIST[data.cotizacion.servidor].HEARTBEAT_URL).then((data) => {
+                        if (data.status === constants.HTTP_OK) {
+                            return res.redirect(307, constants.SERVIDORES_DIST[servidor].HOST + "/pago");
+                        }
+                    }).catch(error => {
+                        console.log("ALERTA: El servidor destino no pudo atender la llamada ", error.message);
+                    });
+                }
+                actualizarEstadoOrdenFirestore(cotizacion.firebaseId).then(isOk => {
+                    console.log("Se actualizo la orden en firestore exitosamente");
                 }).catch(error => {
-                    console.log("ALERTA: El servidor destino no pudo atender la llamada ", error.message);
+                    console.log("No se pudo actualizar el estado de la orden en Firestore ", error.message);
+                });
+                pagoParcial(req.body, (resp) => {
+                    if (resp.code === 200) {
+                        return res.status(resp.code).send(resp.data);
+                    } else {
+                        return res.status(400).send(resp.data);
+                    }
+                });
+            } else {
+                pagoParcial(req.body, (resp) => {
+                    if (resp.code === 200) {
+                        return res.status(resp.code).send(resp.data);
+                    } else {
+                        return res.status(400).send(resp.data);
+                    }
                 });
             }
-            actualizarEstadoOrdenFirestore(cotizacion.firebaseId).then(isOk => {
-                console.log("Se actualizo la orden en firestore exitosamente");
-            }).catch(error => {
-                console.log("No se pudo actualizar el estado de la orden en Firestore ", error.message);
-            });
-            pagoParcial(req.body, (error, resp) => {
-                if (!error) {
+        }).catch(error => {
+            console.log("Ocurrio un error al tratar de obtener la orden desde Firestore ", req.body.ordenID, error.message);
+            pagoParcial(req.body, (resp) => {
+                if (resp.code === 200) {
                     return res.status(resp.code).send(resp.data);
                 } else {
                     return res.status(400).send(resp.data);
                 }
             });
-        }).catch(error => {
-            console.log("Ocurrio un error al tratar de obtener la orden desde Firestore ", req.body.ordenID, error.message);
-            return res.status(pagoLocal.code).send(pagoLocal.data);
         });
     });
 
@@ -417,7 +435,7 @@ function pagoParcial(reqBody, callback) {
             transicionarCotiAPagado(reqBody, function (err, isOk) {
                 if (isOk) {
                     insertarPago(reqBody, function (err2, pago) {
-                        if (pago) {
+                        if (!err2) {
                             mandarPagoAFirestore(pago);
                             callback(null, {
                                 code: 200,
@@ -427,11 +445,13 @@ function pagoParcial(reqBody, callback) {
                                 }
                             });
                         } else {
-                            callback(null, {
-                                success: true,
+                            console.log('entrando al else', err2.message);
+                            callback({
+                                code: 400,
                                 data: {
+                                    success: false,
                                     message: "Pago realizado con exito para la orden " + reqBody.ordenID + " pero no se pudo guardar la informacion para historial ",
-                                    errors: err2
+                                    errors: err2.message
                                 }
                             });
                         }

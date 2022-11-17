@@ -55,7 +55,7 @@ async function guardarOrdenEnDBLocal(cotizacion, callback) {
                 if (!err2) {
                     cotizacion.busMensajeria = busMensajeria['bus_mensajeria'];
                     agregarCotizacion(cotizacion, function (err3, cotiRes) {
-                        if (err) {
+                        if (err3) {
                             callback({
                                 data: {
                                     success: false,

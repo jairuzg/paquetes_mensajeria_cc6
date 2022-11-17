@@ -29,7 +29,7 @@ function insertarBus(bus, callback) {
     let sql = 'insert into bus_mensajeria (marca, modelo, capacidad_peso, zona_cobertura) values (?, ?, ?, ?)';
     conn.query(sql, [bus.marca, bus.modelo, bus.capacidadPeso, bus.zonaCobertura], function (err, result) {
         if (err) {
-            console.log(err);
+            console.log(err, false);
             callback(err);
         } else {
             callback(null, true);

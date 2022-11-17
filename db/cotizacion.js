@@ -16,14 +16,13 @@ function agregarCotizacion(cotizacion, callback) {
     let sql = 'insert into cotizacion_msj (cotizacion_msj, recogida, destino, fecha_servicio, precio_envio, tiempo_estimado_llegada, ' +
         ' bus_mensajeria, nombre_recibe, estado, cantidad_articulos, precio_articulos, precio_total, peso_total, servidor, externalDBId) ' +
         ' values (?, point(?, ?), point(?, ?), now(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?);';
-    return conn.query(sql, [cotizacion.ordenID, cotizacion.recogidaLongitud, cotizacion.recogidaLatitud, cotizacion.destinoLongitud,
+
+    conn.query(sql, [cotizacion.ordenID, cotizacion.recogidaLongitud, cotizacion.recogidaLatitud, cotizacion.destinoLongitud,
         cotizacion.destinoLatitud, cotizacion.costoEnvio, cotizacion.tiempoEstimadoLlegada, cotizacion.busMensajeria, cotizacion.nombreRecibe, cotizacion.estado,
         cotizacion.cantidadArticulos, cotizacion.precioTotal, (cotizacion.precioTotal + (cotizacion.precioTotal * constants.PERCENT_TAX)),
         cotizacion.pesoTotal, cotizacion.servidor, cotizacion.firebaseId], function (err, results, fields) {
-        console.log('ya dentro del query?')
         if (err) {
-            console.log(err)
-            callback(err);
+            callback(err.message);
         } else {
             console.log("que pasa dentro del success de agregar cotizacion", cotizacion)
             callback(null, cotizacion);
