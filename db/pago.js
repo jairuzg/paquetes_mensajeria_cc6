@@ -1,37 +1,43 @@
 const conexion = require('./conexion');
 const {dbfirestore} = require("./firebase");
 const constants = require("./../common/constants");
+const {transformarPagoAFirebasePago} = require("../servicios/servicio_pagos");
+const {getCurrentTime} = require("../common/utils");
 const conn = conexion.conn;
 
 function insertarPago(pago, callback) {
-    let sql = "insert into pago (ordenID, numero_cc, fecha_transaccion, exp_mes, exp_anio) " +
-        "values (?, ?, now(), ?, ?)";
-    conn.query(sql, [pago.ordenID, pago.numeroCC, pago.mesExp, pago.anioExp], (errors, result) => {
+    console.log("adentro de insretarPago ", pago);
+    let sql = "insert into pago (ordenID, numero_cc, fecha_transaccion, exp_mes, exp_anio, external_db_id, estado_transaccion) " +
+        "values (?, ?, ?, ?, ?, ?, ?)";
+    conn.query(sql, [pago.ordenID, pago.numeroCC, pago.fechaTransaccion? pago.fechaTransaccion: getCurrentTime(), pago.mesExp,
+        pago.anioExp, pago.firebaseId, pago.firebaseId? constants.PAGO_EXITOSO: constants.PAGO_FALLIDO], (errors, result) => {
         if (!errors) {
             pago.pagoId = result.insertId;
             pago.fechaTransaccion = Date();
             callback(null, pago);
         } else {
-            callback(errors);
+            callback(errors, pago);
         }
     });
 }
 
-function mandarPagoAFirestore(pago) {
-    delete pago.numeroCC;
-    delete pago.mesExp;
-    delete pago.anioExp;
-    pago.estado = constants.EXITOSO;
+async function mandarPagoAFirestore(pago) {
+    let pagoFb = transformarPagoAFirebasePago(pago);
+    console.log("pagoFb? ",pagoFb);
     pago.servidor = constants.SERVIDOR_ACTUAL;
-    dbfirestore.collection("payments").add(pago).then(docRef => {
-        console.log("documento escrito, ID: ", docRef.id);
+    let errFb;
+    await dbfirestore.collection("payments").add(pagoFb).then(docRef => {
+        console.log("documento escrito para el PAGO, ID: ", docRef.id);
+        pago.firebaseId = docRef.id;
     }).catch(err => {
-        console.log("ocurrio un error al tratar de escribir el documento ", err);
+        errFb = err;
+        console.log("ocurrio un error al tratar de escribir el documento de pago ", err);
     });
+    return {errFb, pago};
 }
 
 function obtenerPagoDeLaDBLocalPorOrdenID(ordenID, callback) {
-    let sql = "select pago, ordenID, fecha_transaccion fechaTransaccion from pago where ordenID = ? ";
+    let sql = "select pago, ordenID, fecha_transaccion fechaTransaccion, estado_transaccion estadoTransaccion from pago where ordenID = ? ";
     conn.query(sql, ordenID, (errors, rows, fields) => {
         if (!errors && rows.length) {
             let pago = JSON.parse(JSON.stringify(rows));

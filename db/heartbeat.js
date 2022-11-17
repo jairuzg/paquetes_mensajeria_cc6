@@ -6,8 +6,8 @@ function heartBeat(callback) {
         if (err) {
             callback(err, false);
         }
-        console.log(rows)
         if (rows.length) {
+            console.log("Heartbeat healthy! :) ",rows)
             callback(null, true)
         }
     });

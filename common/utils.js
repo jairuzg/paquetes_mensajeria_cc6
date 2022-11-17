@@ -7,7 +7,12 @@ function cloneObject(object) {
     return JSON.parse(JSON.stringify(object));
 };
 
+function getCurrentTime() {
+    return new Date().toISOString().slice(0, 19).replace('T', ' ');
+}
+
 module.exports = {
     getRandomInRange: getRandomInRange,
-    cloneObject: cloneObject
+    cloneObject: cloneObject,
+    getCurrentTime: getCurrentTime
 }

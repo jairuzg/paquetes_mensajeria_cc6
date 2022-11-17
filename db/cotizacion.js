@@ -12,9 +12,8 @@ const distance = getDistance(
 console.log(distance / 1000) //value in km
 
 function agregarCotizacion(cotizacion, callback) {
-    console.log('entrando a agregar cotizacion');
     let sql = 'insert into cotizacion_msj (cotizacion_msj, recogida, destino, fecha_servicio, precio_envio, tiempo_estimado_llegada, ' +
-        ' bus_mensajeria, nombre_recibe, estado, cantidad_articulos, precio_articulos, precio_total, peso_total, servidor, externalDBId) ' +
+        ' bus_mensajeria, nombre_recibe, estado, cantidad_articulos, precio_articulos, precio_total, peso_total, servidor, external_db_id) ' +
         ' values (?, point(?, ?), point(?, ?), now(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?);';
 
     conn.query(sql, [cotizacion.ordenID, cotizacion.recogidaLongitud, cotizacion.recogidaLatitud, cotizacion.destinoLongitud,
@@ -76,9 +75,10 @@ function obtenerCotizacionPorOdenID(ordenID, callback) {
 async function obtenerCotizacionPorOdenEnFirestore(ordenId, callback) {
     const ordersRef = dbfirestore.collection('orders');
     const snapshot = await ordersRef.where('ordenID', '==', ordenId).get();
+    let errFb;
     if (snapshot.empty) {
         console.log('No matching documents.');
-        return;
+        errFb = new Error("No se pudo encontrar una orden con ese ID en firestore");
     }
 
     let coti;
@@ -88,7 +88,7 @@ async function obtenerCotizacionPorOdenEnFirestore(ordenId, callback) {
         coti.firebaseId = doc.id;
     });
     console.log("Se encontro la cotizacion en firebase ", coti.firebaseId);
-    return coti;
+    return {errFb, coti};
 }
 
 async function actualizarEstadoOrdenFirestore(docId) {

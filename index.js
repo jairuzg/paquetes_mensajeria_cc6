@@ -329,9 +329,12 @@ app.post('/delivery',
 
 app.get('/orden/:ordenID', function (req, res) {
     let ordenID = req.body.ordenID ? req.body.ordenID : req.params.ordenID;
-    obtenerCotizacionPorOdenEnFirestore(ordenID).then(cotiFirestore => {
-        delete cotiFirestore.firebaseId;
-        return res.status(200).send(cotiFirestore);
+    obtenerCotizacionPorOdenEnFirestore(ordenID).then(resp => {
+        if (!resp.errFb) {
+            let cotiFirestore = resp.coti;
+            delete cotiFirestore.firebaseId;
+            return res.status(200).send(cotiFirestore);
+        }
     });
 });
 
@@ -352,9 +355,16 @@ app.post('/orden',
             console.log(errors);
             return res.status(400).json({errors: errors.array()});
         }
-        obtenerCotizacionPorOdenEnFirestore(req.body.ordenID).then(cotiFirestore => {
-            delete cotiFirestore.firebaseId;
-            return res.status(200).send(cotiFirestore);
+        obtenerCotizacionPorOdenEnFirestore(req.body.ordenID).then(resp => {
+            if (!resp.errFb) {
+                let cotiFirestore = resp.coti
+                delete cotiFirestore.firebaseId;
+                return res.status(200).send(cotiFirestore);
+            } else res.redirect(307, '/ordenLocal');
+        }).catch(error => {
+            console.log("Ocurrio un error al tratar de obtener la orden desde firestore ", error.message);
+            let baseUrl = constants.SERVIDORES_DIST[constants.SERVIDOR_ACTUAL]['HOST']
+            res.redirect(307, '/ordenLocal');
         });
     });
 
@@ -372,6 +382,25 @@ app.get('/pagoLocal/:ordenID', (req, res) => {
     });
 });
 
+app.post('/ordenLocal', body("ordenID").isString().notEmpty(), (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        console.log(errors);
+        return res.status(400).json({errors: errors.array()});
+    }
+    obtenerPagoDeLaDBLocalPorOrdenID(req.body.ordenID, (errors, pago) => {
+        if (pago) {
+            return res.status(200).send(pago);
+        } else {
+            return res.status(400).send({
+                success: false,
+                message: "Ocurrio un error al tratar de encontrar el pago con ordenID " + req.body.ordenID,
+                errors: errors
+            })
+        }
+    });
+});
+
 app.post('/pago',
     body("ordenID").notEmpty().isString(),
     body("numeroCC").isString().notEmpty(),
@@ -381,8 +410,9 @@ app.post('/pago',
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({errors: errors.array()});
         let cotizacion;
-        obtenerCotizacionPorOdenEnFirestore(req.body.ordenID).then(cotiFirestore => {
-            if (cotiFirestore) {
+        obtenerCotizacionPorOdenEnFirestore(req.body.ordenID).then(resp => {
+            if (!resp.errFb) {
+                let cotiFirestore = resp.coti;
                 cotizacion = cotiFirestore;
                 const servidor = cotiFirestore.servidor;
                 if (servidor != constants.SERVIDOR_ACTUAL) {
@@ -401,7 +431,7 @@ app.post('/pago',
                 }).catch(error => {
                     console.log("No se pudo actualizar el estado de la orden en Firestore ", error.message);
                 });
-                pagoParcial(req.body, (resp) => {
+                pagoParcial(req.body, true, (resp) => {
                     if (resp.code === 200) {
                         return res.status(resp.code).send(resp.data);
                     } else {
@@ -409,7 +439,8 @@ app.post('/pago',
                     }
                 });
             } else {
-                pagoParcial(req.body, (resp) => {
+                console.log("Tratando de insertar el pago en la db local, sin haber lanzado excepcion");
+                pagoParcial(req.body, false, (resp) => {
                     if (resp.code === 200) {
                         return res.status(resp.code).send(resp.data);
                     } else {
@@ -418,8 +449,8 @@ app.post('/pago',
                 });
             }
         }).catch(error => {
-            console.log("Ocurrio un error al tratar de obtener la orden desde Firestore ", req.body.ordenID, error.message);
-            pagoParcial(req.body, (resp) => {
+            console.log("Excepcion: Ocurrio un error al tratar de obtener la orden desde Firestore ", req.body.ordenID, error.message);
+            pagoParcial(req.body, false, (resp) => {
                 if (resp.code === 200) {
                     return res.status(resp.code).send(resp.data);
                 } else {
@@ -429,47 +460,83 @@ app.post('/pago',
         });
     });
 
-function pagoParcial(reqBody, callback) {
+function pagoParcial(reqBody, sinErrorEnFb, callback) {
+    let pago = {
+        ordenID: reqBody.ordenID,
+        numeroCC: reqBody.numeroCC,
+        mesExp: reqBody.mesExp,
+        anioExp: reqBody.anioExp
+    }
     ordenExiste(reqBody.ordenID, (errors, siExiste) => {
         if (siExiste) {
             transicionarCotiAPagado(reqBody, function (err, isOk) {
                 if (isOk) {
-                    insertarPago(reqBody, function (err2, pago) {
-                        if (!err2) {
-                            mandarPagoAFirestore(pago);
-                            callback(null, {
-                                code: 200,
-                                data: {
-                                    success: true,
-                                    message: "Pago realizado con exito para la orden " + reqBody.ordenID
-                                }
+                    if (sinErrorEnFb) {
+                        mandarPagoAFirestore(pago).then(resp => {
+                            if (!resp.errFb) {
+                                guardarPagoEnDbLocal(resp.pago, (resp) => {
+                                    callback(resp);
+                                })
+                            }
+                        }).catch(error => {
+                            console.log("Ocurrio un error al intentar insertar el pago en la db local para la orden ", pago.ordenID, error.message);
+                            guardarPagoEnDbLocal(pago, (resp) => {
+                                callback(resp);
                             });
-                        } else {
-                            console.log('entrando al else', err2.message);
-                            callback({
-                                code: 400,
-                                data: {
-                                    success: false,
-                                    message: "Pago realizado con exito para la orden " + reqBody.ordenID + " pero no se pudo guardar la informacion para historial ",
-                                    errors: err2.message
-                                }
-                            });
+                        });
+                    } else {
+                        guardarPagoEnDbLocal(reqBody, (resp) => {
+                            callback(resp);
+                        });
+                    }
+                } else {
+                    callback({
+                        code: 400,
+                        data: {
+                            success: false,
+                            message: "Ocurrio un error al tratar de almacenar el pago en la db local",
+                            errors: err
                         }
                     });
-                } else {
-                    callback(err);
                 }
             });
         } else {
-            console.log(`La orden ${reqBody.ordenID} no existe en este servidor `, constants.SERVIDOR_ACTUAL);
+            callback({
+                code: 404,
+                data: {
+                    success: false,
+                    message: `La orden ${reqBody.ordenID} no existe en este servidor ${constants.SERVIDOR_ACTUAL} contacte al administrador o intente despues`
+                }
+            });
+            console.log(`La orden ${reqBody.ordenID} no se encuentra en este servidor `, constants.SERVIDOR_ACTUAL);
         }
     });
 }
 
-app.post('/test', (req, res) => {
-    encontrarZonaCercanaAPuntoRecogida(req.body.latitud, req.body.longitud, "A");
-    return res.status(200).send({});
-});
+function guardarPagoEnDbLocal(pago, callback) {
+    insertarPago(pago, function (err2, pago) {
+        let fbError = pago.firebaseId ? "" : ", no se pudo insertar el pago en Firestore ";
+        if (!err2) {
+            callback({
+                code: 200,
+                data: {
+                    success: true,
+                    message: "Pago realizado con exito para la orden " + pago.ordenID + fbError
+                }
+            });
+        } else {
+            callback({
+                code: 400,
+                data: {
+                    success: false,
+                    message: "Estado transicionado a pagado para la orden " + pago.ordenID + " pero no se pudo guardar el record de pago en la db local ",
+                    errors: err2.message
+                }
+            });
+        }
+    });
+}
+
 app.get('/healthCheck', (req, res) => {
     heartBeat(function (err, isOk) {
         if (isOk) {
