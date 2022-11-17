@@ -306,23 +306,29 @@ app.post('/delivery',
                 if (data.cotizacion.servidor != constants.SERVIDOR_ACTUAL) {
                     console.log("Distribucion: Comparando servidores, destino " + data.cotizacion.servidor + " servidor actual " + constants.SERVIDOR_ACTUAL);
 
-                    axios.get(constants.SERVIDORES_DIST[data.cotizacion.servidor].HEARTBEAT_URL).then((data) => {
-                        if (data.status === constants.HTTP_OK) {
+                    axios.get(constants.SERVIDORES_DIST[data.cotizacion.servidor].HEARTBEAT_URL).then((data2) => {
+                        if (data2.status === constants.HTTP_OK) {
                             console.log("Redirigiendo request a servidor correspondiente ");
                             return res.redirect(307, constants.SERVIDORES_DIST[data.cotizacion.servidor].HOST + "/delivery");
                         } else {
                             console.log("ALERTA: El servidor destino no pudo atender la llamada");
+                            guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
+                                return res.status(orderResp.code).send(orderResp.data);
+                            });
                         }
                     }).catch(error => {
                         console.log("ALERTA: El servidor destino no pudo atender la llamada ", error.message);
+                        guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
+                            return res.status(orderResp.code).send(orderResp.data);
+                        });
                     });
                 }
-                guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
-                    return res.status(orderResp.code).send(orderResp.data);
-                });
             }
         }).catch((ex) => {
             console.log(ex);
+            guardarOrdenEnDBLocal(cotizacion, (orderResp) => {
+                return res.status(orderResp.code).send(orderResp.data);
+            });
         });
 
     });
