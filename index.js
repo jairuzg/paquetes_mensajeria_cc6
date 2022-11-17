@@ -2,14 +2,12 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const axios = require('axios');
+const ccgenerator = require('creditcard-generator')
 
 app.use(express.json());
 app.use(cors(
     {
-        "origin": "*",
-        "methods": "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
-        "preflightContinue": false,
-        "optionsSuccessStatus": 204
+        "origin": "*"
     }
 ));
 const {body, validationResult, oneOf} = require('express-validator');
@@ -45,6 +43,7 @@ const {
     guardarOrdenEnDBLocal,
     transformarCotizacionAOrden
 } = require("./servicios/servicio_ordenes");
+const {generateRandomMonthAndYear} = require("./common/utils");
 
 app.get('/', (req, res) => {
     res.status(200).send({
@@ -417,14 +416,23 @@ app.post('/ordenLocal', body("ordenID").isString().notEmpty(), (req, res) => {
 
 app.post('/pago',
     body("ordenID").notEmpty().isString(),
-    body("numeroCC").isString().notEmpty(),
-    body("mesExp").isString().notEmpty(),
-    body("anioExp").isString().notEmpty(),
+    body("numeroCC").isString().optional(),
+    body("mesExp").isString().optional(),
+    body("anioExp").isString().optional(),
     (req, res) => {
+        let cc = ccgenerator.GenCC("VISA");
+        let monthAndYear = generateRandomMonthAndYear();
+        const reqBody = {
+            ordenID: req.body.ordenID,
+            numeroCC: cc[0],
+            mesExp: monthAndYear.randomMonth,
+            anioExp: monthAndYear.randomYear
+        }
         const errors = validationResult(req);
+
         if (!errors.isEmpty()) return res.status(400).json({errors: errors.array()});
         let cotizacion;
-        obtenerCotizacionPorOdenEnFirestore(req.body.ordenID).then(resp => {
+        obtenerCotizacionPorOdenEnFirestore(reqBody.ordenID).then(resp => {
             if (!resp.errFb) {
                 let cotiFirestore = resp.coti;
                 cotizacion = cotiFirestore;
@@ -445,7 +453,7 @@ app.post('/pago',
                 }).catch(error => {
                     console.log("No se pudo actualizar el estado de la orden en Firestore ", error.message);
                 });
-                pagoParcial(req.body, true, (resp) => {
+                pagoParcial(reqBody, true, (resp) => {
                     if (resp.code === 200) {
                         return res.status(resp.code).send(resp.data);
                     } else {
@@ -454,7 +462,7 @@ app.post('/pago',
                 });
             } else {
                 console.log("Tratando de insertar el pago en la db local, sin haber lanzado excepcion");
-                pagoParcial(req.body, false, (resp) => {
+                pagoParcial(reqBody, false, (resp) => {
                     if (resp.code === 200) {
                         return res.status(resp.code).send(resp.data);
                     } else {
@@ -463,8 +471,8 @@ app.post('/pago',
                 });
             }
         }).catch(error => {
-            console.log("Excepcion: Ocurrio un error al tratar de obtener la orden desde Firestore ", req.body.ordenID, error.message);
-            pagoParcial(req.body, false, (resp) => {
+            console.log("Excepcion: Ocurrio un error al tratar de obtener la orden desde Firestore ", reqBody.ordenID, error.message);
+            pagoParcial(reqBody, false, (resp) => {
                 if (resp.code === 200) {
                     return res.status(resp.code).send(resp.data);
                 } else {

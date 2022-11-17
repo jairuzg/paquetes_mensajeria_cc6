@@ -11,8 +11,17 @@ function getCurrentTime() {
     return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
 
+function generateRandomMonthAndYear() {
+    let randomMonth = parseInt(Math.random() * (12 - 1) + 1);
+
+    let randomYear = parseInt(Math.random() * (2035 - 2023) + 2023);
+
+    return {randomMonth, randomYear};
+}
+
 module.exports = {
     getRandomInRange: getRandomInRange,
     cloneObject: cloneObject,
-    getCurrentTime: getCurrentTime
+    getCurrentTime: getCurrentTime,
+    generateRandomMonthAndYear: generateRandomMonthAndYear
 }
