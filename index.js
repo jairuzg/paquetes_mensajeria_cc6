@@ -326,6 +326,10 @@ app.post('/delivery',
                             return res.status(orderResp.code).send(orderResp.data);
                         });
                     });
+                } else {
+                    guardarOrdenEnDBLocal(cotizacion, (orderResp) => {
+                        return res.status(orderResp.code).send(orderResp.data);
+                    });
                 }
             }
         }).catch((ex) => {
