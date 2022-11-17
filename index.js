@@ -28,10 +28,14 @@ const {
 } = require('./db/zona_cobertura');
 const {
     transicionarCotiAPagado,
-    actualizarEstadoOrdenFirestore, obtenerCotizacionPorOdenEnFirestore, obtenerCotizacionPorOdenID, ordenExiste
+    actualizarEstadoOrdenFirestore, obtenerCotizacionPorOdenEnFirestore, obtenerCotizacionPorOdenID, ordenExiste,
+    obtenerCotizacionLocal
 } = require('./db/cotizacion');
 const {heartBeat} = require('./db/heartbeat');
-const {insertarPago, mandarPagoAFirestore, obtenerPagoDeLaDBLocalPorOrdenID} = require("./db/pago");
+const {
+    insertarPago, mandarPagoAFirestore, obtenerPagoDeLaDBLocalPorOrdenID, obtenerPagoDeLaDBLocal,
+    obtenerPagoPorOrdendeFirestore
+} = require("./db/pago");
 const {
     encontrarZonaCercanaAPuntoRecogida
 } = require("./distribuidor_paqueteria/distribuidor");
@@ -542,6 +546,40 @@ function guardarPagoEnDbLocal(pago, callback) {
         }
     });
 }
+
+app.get('/orders', (req, res) => {
+    obtenerCotizacionLocal(function (err, cotis) {
+        if (cotis) {
+            return res.status(200).send(cotis);
+        } else {
+            return res.status(400).send({
+                success: false,
+                message: "Ocurrio un error al momento de obtener los cotis"
+            });
+        }
+    });
+});
+
+app.get('/pagos', (req, res) => {
+    obtenerPagoDeLaDBLocal(function (err, pagos) {
+        if (pagos) {
+            return res.status(200).send(pagos);
+        } else {
+            return res.status(400).send({
+                success: false,
+                message: "Ocurrio un error al momento de obtener los cotis"
+            });
+        }
+    });
+});
+
+app.get('/pago/:ordenID', function (req, res) {
+    let ordenID = req.body.ordenID ? req.body.ordenID : req.params.ordenID;
+    obtenerPagoPorOrdendeFirestore(ordenID).then(cotiFirestore => {
+        delete cotiFirestore.firestoreId;
+        return res.status(200).send(cotiFirestore);
+    });
+});
 
 app.get('/healthCheck', (req, res) => {
     heartBeat(function (err, isOk) {

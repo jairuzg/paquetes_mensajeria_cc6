@@ -49,8 +49,40 @@ function obtenerPagoDeLaDBLocalPorOrdenID(ordenID, callback) {
     });
 }
 
+function obtenerPagoDeLaDBLocal(callback) {
+    let sql = "select pago, ordenID, fecha_transaccion fechaTransaccion, estado_transaccion estado from pago";
+    conn.query(sql, ordenID, (errors, rows, fields) => {
+        if (!errors && rows.length) {
+            let pagos = JSON.parse(JSON.stringify(rows));
+            callback(null, pagos);
+        } else {
+            if (errors) callback(errors);
+            else callback({error: "No se encontro ningun pago con ese identificador de orden"});
+        }
+    });
+}
+
+async function obtenerPagoPorOrdendeFirestore(ordenID, callback) {
+    const ordersRef = dbfirestore.collection('payments');
+    const snapshot = await ordersRef.where('ordenID', '==', ordenId).get();
+    if (snapshot.empty) {
+        console.log('No matching documents.');
+        return;
+    }
+
+    let pago;
+    snapshot.forEach(doc => {
+        console.log(doc.id, '=>', doc.data());
+        pago = doc.data();
+        pago.firestoreId = doc.id;
+    });
+    return pago;
+}
+
 module.exports = {
     insertarPago: insertarPago,
     mandarPagoAFirestore: mandarPagoAFirestore,
-    obtenerPagoDeLaDBLocalPorOrdenID: obtenerPagoDeLaDBLocalPorOrdenID
+    obtenerPagoDeLaDBLocalPorOrdenID: obtenerPagoDeLaDBLocalPorOrdenID,
+    obtenerPagoDeLaDBLocal: obtenerPagoDeLaDBLocal,
+    obtenerPagoPorOrdendeFirestore: obtenerPagoPorOrdendeFirestore
 }

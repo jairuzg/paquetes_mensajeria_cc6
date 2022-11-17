@@ -125,6 +125,44 @@ function ordenExiste(ordenID, callback) {
     });
 }
 
+function obtenerCotizacionLocal(callback) {
+    let sql = "select cotizacion_msj ordenID, estado, cantidad_articulos cantidadArticulos, fecha_llegada fechaEntrega, " +
+        "st_x(recogida) pickupLongitud, st_y(recogida) pickupLatitud, st_x(destino) deliveryLongitud, st_y(destino) deliveryLatitud,"+
+        "peso_total pesoTotal," +
+        "tiempo_estimado_llegada ETA, precio_envio costoEnvio, precio_articulos precioTotal, servidor from cotizacion_msj ";
+    conn.query(sql, function (err, rows, fields) {
+        if (err) {
+            callback(err)
+        } else {
+            if (rows.length) {
+                let cotis = JSON.parse(JSON.stringify(rows));
+                callback(null, cotis);
+            } else {
+                callback(errors);
+            }
+
+        }
+    });
+}
+
+async function obtenerCotizacionFirestore(callback) {
+    const ordersRef = dbfirestore.collection('orders');
+    const snapshot = await ordersRef.get();
+    if (snapshot.empty) {
+        console.log('No matching documents.');
+        return;
+    }
+
+    let coti;
+    snapshot.forEach(doc => {
+        console.log(doc.id, '=>', doc.data());
+        coti = doc.data();
+        coti.firestoreId = doc.id;
+    });
+    return coti;
+}
+
+
 module.exports = {
     agregarCotizacion: agregarCotizacion,
     transicionarCotiAPagado: transicionarCotiAPagado,
@@ -133,5 +171,7 @@ module.exports = {
     actualizarEstadoOrdenFirestore: actualizarEstadoOrdenFirestore,
     obtenerCotizacionPorOdenEnFirestore: obtenerCotizacionPorOdenEnFirestore,
     actualizarOrdenEnFirestore: actualizarOrdenEnFirestore,
-    ordenExiste: ordenExiste
+    ordenExiste: ordenExiste,
+    obtenerCotizacionLocal: obtenerCotizacionLocal,
+    obtenerCotizacionFirestore: obtenerCotizacionFirestore
 }
