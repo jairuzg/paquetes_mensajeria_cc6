@@ -75,19 +75,18 @@ function obtenerCotizacionPorOdenID(ordenID, callback) {
 async function obtenerCotizacionPorOdenEnFirestore(ordenId, callback) {
     const ordersRef = dbfirestore.collection('orders');
     const snapshot = await ordersRef.where('ordenID', '==', ordenId).get();
-    let errFb;
+    let errFb, coti;
     if (snapshot.empty) {
         console.log('No matching documents.');
         errFb = new Error("No se pudo encontrar una orden con ese ID en firestore");
+    } else {
+        snapshot.forEach(doc => {
+            console.log(doc.id, '=>', doc.data());
+            coti = doc.data();
+            coti.firebaseId = doc.id;
+        });
+        console.log("Se encontro la cotizacion en firebase ", coti.firebaseId);
     }
-
-    let coti;
-    snapshot.forEach(doc => {
-        console.log(doc.id, '=>', doc.data());
-        coti = doc.data();
-        coti.firebaseId = doc.id;
-    });
-    console.log("Se encontro la cotizacion en firebase ", coti.firebaseId);
     return {errFb, coti};
 }
 

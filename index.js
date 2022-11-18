@@ -301,43 +301,70 @@ app.post('/delivery',
             nombreRecibe: req.body.clientName,
             firebaseId: req.body.firebaseId ? req.body.firebaseId : ""
         }
+        obtenerCotizacionPorOdenEnFirestore(cotizacion.ordenID).then(respOC => {
+            if (respOC.errFb) {
+                enviarOrdenAFirebase(cotizacion).then((data) => {
+                    if (!data.error) {
+                        console.log("la coti luego de enviar a firebase", data.cotizacion)
+                        req.body.firebaseId = data.cotizacion.firebaseId;
+                        if (data.cotizacion.servidor != constants.SERVIDOR_ACTUAL) {
+                            console.log("Distribucion: Comparando servidores, destino " + data.cotizacion.servidor + " servidor actual " + constants.SERVIDOR_ACTUAL);
 
-        enviarOrdenAFirebase(cotizacion).then((data) => {
-            if (!data.error) {
-                console.log("la coti luego de enviar a firebase", data.cotizacion)
-                req.body.firebaseId = data.cotizacion.firebaseId;
-                if (data.cotizacion.servidor != constants.SERVIDOR_ACTUAL) {
-                    console.log("Distribucion: Comparando servidores, destino " + data.cotizacion.servidor + " servidor actual " + constants.SERVIDOR_ACTUAL);
-
-                    axios.get(constants.SERVIDORES_DIST[data.cotizacion.servidor].HEARTBEAT_URL).then((data2) => {
-                        if (data2.status === constants.HTTP_OK) {
-                            console.log("Redirigiendo request a servidor correspondiente ");
-                            return res.redirect(307, constants.SERVIDORES_DIST[data.cotizacion.servidor].HOST + "/delivery");
+                            axios.get(constants.SERVIDORES_DIST[data.cotizacion.servidor].HEARTBEAT_URL).then((data2) => {
+                                if (data2.status === constants.HTTP_OK) {
+                                    console.log("Redirigiendo request a servidor correspondiente ");
+                                    return res.redirect(307, constants.SERVIDORES_DIST[data.cotizacion.servidor].HOST + "/delivery");
+                                } else {
+                                    console.log("ALERTA: El servidor destino no pudo atender la llamada");
+                                    guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
+                                        return res.status(orderResp.code).send(orderResp.data);
+                                    });
+                                }
+                            }).catch(error => {
+                                console.log("ALERTA: El servidor destino no pudo atender la llamada ", error.message);
+                                guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
+                                    return res.status(orderResp.code).send(orderResp.data);
+                                });
+                            });
                         } else {
-                            console.log("ALERTA: El servidor destino no pudo atender la llamada");
-                            guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
+                            guardarOrdenEnDBLocal(cotizacion, (orderResp) => {
                                 return res.status(orderResp.code).send(orderResp.data);
                             });
                         }
-                    }).catch(error => {
-                        console.log("ALERTA: El servidor destino no pudo atender la llamada ", error.message);
-                        guardarOrdenEnDBLocal(data.cotizacion, (orderResp) => {
-                            return res.status(orderResp.code).send(orderResp.data);
-                        });
+                    }
+                }).catch((ex) => {
+                    console.log(ex);
+                    guardarOrdenEnDBLocal(cotizacion, (orderResp) => {
+                        return res.status(orderResp.code).send(orderResp.data);
                     });
+                });
+            } else {
+                cotizacion.firebaseId = respOC.coti.firebaseId;
+                cotizacion.servidor = respOC.coti.servidor;
+                if (cotizacion.servidor != constants.SERVIDOR_ACTUAL) {
+                    axios.get(constants.SERVIDORES_DIST[cotizacion.servidor].HEARTBEAT_URL).then((data2) => {
+                        if (data2.status === constants.HTTP_OK) {
+                            console.log("Redirigiendo request a servidor correspondiente ");
+                            return res.redirect(307, constants.SERVIDORES_DIST[cotizacion.servidor].HOST + "/delivery");
+                        } else {
+                            console.log("ALERTA: El servidor destino no pudo atender la llamada");
+                            guardarOrdenEnDBLocal(cotizacion, (orderResp) => {
+                                return res.status(orderResp.code).send(orderResp.data);
+                            });
+                        }
+                    })
                 } else {
                     guardarOrdenEnDBLocal(cotizacion, (orderResp) => {
                         return res.status(orderResp.code).send(orderResp.data);
                     });
                 }
             }
-        }).catch((ex) => {
+        }).catch(ex => {
             console.log(ex);
             guardarOrdenEnDBLocal(cotizacion, (orderResp) => {
                 return res.status(orderResp.code).send(orderResp.data);
             });
         });
-
     });
 
 app.get('/orden/:ordenID', function (req, res) {
