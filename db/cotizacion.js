@@ -107,7 +107,7 @@ async function actualizarOrdenEnFirestore(cotizacion, firebaseId) {
     console.log("dentro de actualizar orden para firebase ", cotizacion)
     const ordersRef = await dbfirestore.collection('orders').doc(firebaseId);
     delete cotizacion.firebaseId;
-    ordersRef.update(cotizacion)
+    await ordersRef.update(cotizacion)
 }
 
 function ordenExiste(ordenID, callback) {
@@ -137,7 +137,7 @@ function obtenerCotizacionLocal(callback) {
                 let cotis = JSON.parse(JSON.stringify(rows));
                 callback(null, cotis);
             } else {
-                callback(errors);
+                callback(err);
             }
 
         }
