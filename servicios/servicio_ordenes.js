@@ -33,7 +33,7 @@ async function enviarOrdenAFirebase(cotizacion) {
     });
     let error;
     let coti = transformarCotizacionAOrden(cotizacion);
-    if (cotizacion.firebaseId === "") {
+    if (!cotizacion.firebaseId || cotizacion.firebaseId === "") {
         await guardarCotizacionEnFirebase(coti).then((data) => {
             if (data.errFb) {
                 console.log("Hubo un error al tratar de guardar la cotizacion en la db central", errFb)
@@ -65,10 +65,10 @@ async function guardarOrdenEnDBLocal(cotizacion, callback) {
                                 code: 400
                             });
                         } else {
-                            if (cotizacion.firebaseId === "") {
-                                guardarCotizacionEnFirebase(transformarCotizacionAOrden(cotiRes));
-                            } else {
+                            if (cotizacion.firebaseId && cotizacion.firebaseId !== "") {
                                 actualizarOrdenEnFirestore(transformarCotizacionAOrden(cotiRes), cotizacion.firebaseId);
+                            } else {
+                                guardarCotizacionEnFirebase(transformarCotizacionAOrden(cotiRes));
                             }
                             callback({
                                 code: 200,

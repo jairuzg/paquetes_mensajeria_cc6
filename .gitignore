@@ -132,5 +132,5 @@ dist
 package-lock.json
 .idea
 .env.save
-serviceAccountKey.json
+serviceAccountKey*
 db/conexion.js
